@@ -30,16 +30,21 @@ with image.imports():
 
 class TTSRequest(BaseModel):
     text: str
-    lang: str
     voice: str
         
-@app.cls(gpu=None, image=image, timeout=60, secrets=[modal.Secret.from_name("kokoro-secret")])
+@app.cls(gpu='L40S', image=image, timeout=60, secrets=[modal.Secret.from_name("kokoro-secret")])
 class Model:
-    def inference(self, text: str, lang: str, voice: str):
-        print(f"Generating text to speech for '{text}' with language '{lang}' and voice '{voice}'")
+    @modal.enter()
+    def load_model(self):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print(f"Loading Kokoro model on device: {device}")
 
-        pipeline = KPipeline(lang_code=lang)
-        generator = pipeline(text, voice, 1.3)
+        self.pipeline = KPipeline(lang_code="p", device=device)
+
+    def inference(self, text: str, voice: str):
+        print(f"Generating text to speech for '{text}' with voice '{voice}'")
+
+        generator = self.pipeline(text, voice, 1.5)
 
         audio_chunks = []
         for i, (gs, ps, audio) in enumerate(generator):
@@ -63,8 +68,8 @@ class Model:
             return None
     
     @modal.method()
-    def _inference(self, text: str, lang: str, voice: str):
-        return self.inference(text, lang, voice)
+    def _inference(self, text: str, voice: str):
+        return self.inference(text, voice)
     
     @modal.fastapi_endpoint(docs=True, method="POST")
     def web_inference(self, request: TTSRequest, x_api_key: str = Header(None)):
@@ -72,7 +77,7 @@ class Model:
         if x_api_key != api_key:
             return JSONResponse(status_code=401, content={"message": "Unauthorized"})
 
-        audio = self.inference(request.text, request.lang, request.voice)
+        audio = self.inference(request.text, request.voice)
         
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmpfile:
             tmpfile.write(audio)
