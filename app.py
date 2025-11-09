@@ -44,7 +44,7 @@ class Model:
     def inference(self, text: str, voice: str):
         print(f"Generating text to speech for '{text}' with voice '{voice}'")
 
-        generator = self.pipeline(text, voice, 1.5)
+        generator = self.pipeline(text, voice, 1.2)
 
         audio_chunks = []
         for i, (gs, ps, audio) in enumerate(generator):
@@ -92,10 +92,9 @@ class Model:
 @app.local_entrypoint()
 def main():
     text = "Olá, este é um exemplo de síntese de fala usando Kokoro."
-    lang = "p"
     voice = "pf_dora"
 
-    audio = Model()._inference.remote(text, lang, voice)
+    audio = Model()._inference.remote(text, voice)
     with open("output.wav", "wb") as f:
         f.write(audio)
 
